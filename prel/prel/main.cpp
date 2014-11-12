@@ -32,9 +32,7 @@ int main(int argc, const char * argv[]) {
     arma::vec3 right_parts;  // the right-hand side of the system
     arma::vec3 results;  // the values of the expansion coefficients g_{c,pq} - the order is g_{N2,10}, g_{N2,01}, g_{N,10}
     
-    double T;
-    double n;  // the numeric density of the mixture
-    double rho;  // the density of the mixture
+    double T, n, rho, omega11_N2N, tau_rot_N2N, tau_rot_N2N2; // the numeric density of the mixture, the density of the mixture, Omega^{(1,1)}_{N2,N}, rotational relaxation times for N2+N and N2+N2
     
     beta_matrix.at(0, 0) = 1.5 * (1. - xN);
     beta_matrix.at(0, 2) = 1.5 * xN;  // these appear due to the constraint conditions and are independent of temperature
@@ -44,6 +42,11 @@ int main(int argc, const char * argv[]) {
         n = p / T;
         N2.renorm(T, (1. -xN) * n);
         rho = (1. -xN) * n * N2.mass + xN * n * N.mass;
+        omega11_N2N = klib::omega(T, 1, 1, idata_N2N, "ESA", true, true);  // we set nokt to true so that the result is of order 10e-07 instead of 10e-16
+        tau_rot_N2N = klib::rot_rel_time_vss(T, idata_N2N, N2, n);
+        tau_rot_N2N2 = klib::rot_rel_time_vss(T, idata_N2N2, N2, n);
         
+        beta_matrix.at(2,0) += omega11_N2N;
+        beta_matrix.at(2,2) += omega11_N2N;
     }
 }
