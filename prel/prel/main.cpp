@@ -66,5 +66,8 @@ int main(int argc, const char * argv[]) {
                                 + 1.0 * (1.5 * KLIB_CONST_K * T + N.form)) * klib::wt_poly_norm(T, N2) / (rho * T * cV);  // need R_{N2}react, R_{N}react, Jsl averaged
         right_parts[2] = xN * (1.0 * (1.5 * KLIB_CONST_K * T + N2.avg_full_energy(T) + N2.form)
                                 + 1.0 * (1.5 * KLIB_CONST_K * T + N.form)) * 1.5 / (rho * T * cV);  // need R_{N2}react, R_{N}react, Jsl averaged
+        
+        results = arma::solve(beta_matrix, right_parts);
+        std::cout << " " << -KLIB_CONST_K * T * (xN2 * results[0] + xN * results[1]) << ",";
     }
 }
