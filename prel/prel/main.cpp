@@ -33,7 +33,7 @@ int main(int argc, const char * argv[]) {
     arma::vec3 right_parts;  // the right-hand side of the system
     arma::vec3 results;  // the values of the expansion coefficients g_{c,pq} - the order is g_{N2,10}, g_{N2,01}, g_{N,10}
     
-    double T, n, rho, omega11_N2N, tau_rot_N2N, tau_rot_N2N2, eta_zeta_N2N2, eta_zeta_N2N; // the numeric density of the mixture, the density of the mixture, Omega^{(1,1)}_{N2,N}, rotational relaxation times for N2+N and N2+N2, the quantity 4T \pi / (\eta_{cd} * \xi_{cd})
+    double T, n, rho, omega11_N2N, tau_rot_N2N, tau_rot_N2N2, eta_zeta_N2N2, eta_zeta_N2N, cV; // the numeric density of the mixture, the density of the mixture, Omega^{(1,1)}_{N2,N}, rotational relaxation times for N2+N and N2+N2, the quantity 4T \pi / (\eta_{cd} * \xi_{cd}), the quantity dE/dT
     
     beta_matrix.at(0, 0) = 1.5 * (1. - xN);
     beta_matrix.at(0, 2) = 1.5 * xN;  // these appear due to the constraint conditions and are independent of temperature
@@ -50,16 +50,21 @@ int main(int argc, const char * argv[]) {
         eta_zeta_N2N2 = 1. / (n * KLIB_CONST_K * tau_rot_N2N2);
         eta_zeta_N2N = 1. / (n * KLIB_CONST_K * tau_rot_N2N);
         
+        cV = 1.5 * KLIB_CONST_K * n / rho + xN2 * (N2.mass * n / rho) * (N2.crot + N2.E_vibr_dT(T));
         
-//        beta_matrix.at(0, 1) = xN2 * klib::wt_poly_norm(T, N2);
+        beta_matrix.at(0, 1) = xN2 * klib::wt_poly_norm(T, N2);
         beta_matrix.at(1, 0) = -xN2 * N2.mass * N2.crot * (xN * (0.33333) * eta_zeta_N2N +xN2 * eta_zeta_N2N2);  // does vibrational relaxation time play any significant role?
         beta_matrix.at(1, 1) = xN2 * N2.mass * N2.crot * (xN * eta_zeta_N2N + xN2 * eta_zeta_N2N2);
         
         beta_matrix.at(1, 0) /= sqrt(KLIB_CONST_K * T);
         beta_matrix.at(1, 1) /= sqrt(KLIB_CONST_K * T);
         
-        std::cout << "\n" << omega11_N2N << " " << beta_matrix.at(1, 0) << " " << beta_matrix.at(1, 1);
-        beta_matrix.at(2, 0) += omega11_N2N;
-        beta_matrix.at(2, 2) += omega11_N2N;
+        beta_matrix.at(2, 0) = (2. / 9.) * xN2 * xN * (-16 * omega11_N2N + sqrt(1. / (KLIB_CONST_K * T)) * N2.mass * N2.crot * eta_zeta_N2N);
+        beta_matrix.at(2, 2) = (2. / 9.) * xN2 * xN * (16 * omega11_N2N + 2 * sqrt(1. / (KLIB_CONST_K * T)) * N2.mass * N2.crot * eta_zeta_N2N);
+        
+        right_parts[1] = xN2 * (1.0 * (1.5 * KLIB_CONST_K * T + N2.avg_full_energy(T) + N2.form)
+                                + 1.0 * (1.5 * KLIB_CONST_K * T + N.form)) * klib::wt_poly_norm(T, N2) / (rho * T * cV);  // need R_{N2}react, R_{N}react, Jsl averaged
+        right_parts[2] = xN * (1.0 * (1.5 * KLIB_CONST_K * T + N2.avg_full_energy(T) + N2.form)
+                                + 1.0 * (1.5 * KLIB_CONST_K * T + N.form)) * 1.5 / (rho * T * cV);  // need R_{N2}react, R_{N}react, Jsl averaged
     }
 }
