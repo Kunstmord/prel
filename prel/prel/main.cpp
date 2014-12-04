@@ -15,6 +15,7 @@ int main(int argc, const char * argv[]) {
     int points_amt = 50;  // the amount of points
     double xN = 0.2;  // the relative numeric density of atomic nitrogen
     double xN2 = 1. - xN;
+    double R_react_N2, R_react_N;  // relaxation terms
     
     arma::vec T_array = arma::linspace<arma::vec>(start_T, end_T, points_amt);  // start value of T, end value of T, amount of steps
     arma::vec prel = arma::zeros(50);  // array of relaxation pressure values
@@ -62,10 +63,16 @@ int main(int argc, const char * argv[]) {
         beta_matrix.at(2, 0) = (2. / 9.) * xN2 * xN * (-16 * omega11_N2N + sqrt(1. / (KLIB_CONST_K * T)) * N2.mass * N2.crot * eta_zeta_N2N);
         beta_matrix.at(2, 2) = (2. / 9.) * xN2 * xN * (16 * omega11_N2N + 2 * sqrt(1. / (KLIB_CONST_K * T)) * N2.mass * N2.crot * eta_zeta_N2N);
         
-        right_parts[1] = xN2 * (1.0 * (1.5 * KLIB_CONST_K * T + N2.avg_full_energy(T) + N2.form)
-                                + 1.0 * (1.5 * KLIB_CONST_K * T + N.form)) * klib::wt_poly_norm(T, N2) / (rho * T * cV);  // need R_{N2}react, R_{N}react, Jsl averaged
-        right_parts[2] = xN * (1.0 * (1.5 * KLIB_CONST_K * T + N2.avg_full_energy(T) + N2.form)
-                                + 1.0 * (1.5 * KLIB_CONST_K * T + N.form)) * 1.5 / (rho * T * cV);  // need R_{N2}react, R_{N}react, Jsl averaged
+        R_react_N2 = (xN2 * n) * (klib::rec_rate_treanor_marrone(T, ddata_N2N2, N2, N, N) * (xN * n) * (xN * n) - klib::diss_rate_treanor_marrone(T, ddata_N2N2, N2) * (xN2 * n));
+        R_react_N2 += (xN * n) * (klib::rec_rate_treanor_marrone(T, ddata_N2N, N2, N, N) * (xN * n) * (xN * n) - klib::diss_rate_treanor_marrone(T, ddata_N2N, N2) * (xN2 * n));
+        R_react_N2 /= sqrt(KLIB_CONST_K * T);
+        
+        R_react_N = -2 * R_react_N2;  // this is a binary mixture and the relaxation terms are related in a simple way
+        
+        right_parts[1] = xN2 * (R_react_N2 * (1.5 * KLIB_CONST_K * T + N2.avg_full_energy(T) + N2.form)
+                                + R_react_N * (1.5 * KLIB_CONST_K * T + N.form)) * klib::wt_poly_norm(T, N2) / (rho * T * cV);  // need Jsl averaged
+        right_parts[2] = xN * (R_react_N2 * (1.5 * KLIB_CONST_K * T + N2.avg_full_energy(T) + N2.form)
+                                + R_react_N * (1.5 * KLIB_CONST_K * T + N.form)) * 1.5 / (rho * T * cV);  // need Jsl averaged
         
         results = arma::solve(beta_matrix, right_parts);
         std::cout << " " << -KLIB_CONST_K * T * (xN2 * results[0] + xN * results[1]) << ",";
