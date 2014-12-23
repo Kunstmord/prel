@@ -31,6 +31,7 @@ int main(int argc, const char * argv[]) {
 	double T, n, rho, omega11_N2N, tau_rot_N2N, tau_rot_N2N2, eta_zeta_N2N2, eta_zeta_N2N, cV, SJsl, PJsl; // the numeric density of the mixture, the density of the mixture, Omega^{(1,1)}_{N2,N}, rotational relaxation times for N2+N and N2+N2, the quantity 4T \pi / (\eta_{cd} * \xi_{cd}), the quantity dE/dT
 	beta_matrix.at(0, 0) = 1.5 * (1. - xN);
 	beta_matrix.at(0, 2) = 1.5 * xN; // these appear due to the constraint conditions and are independent of temperature
+	beta_matrix.zeros();
 	right_parts[0] = 0.;
 	for (int i = 0; i < points_amt; i++) {
 		T = T_array[i];
@@ -44,14 +45,14 @@ int main(int argc, const char * argv[]) {
 		eta_zeta_N2N = 1. / (n * KLIB_CONST_K * tau_rot_N2N);
 		cV = 1.5 * KLIB_CONST_K * n / rho + xN2 * (N2.mass * n / rho) * (N2.crot + N2.E_vibr_dT(T));
 		beta_matrix.at(0, 1) = xN2 * klib::wt_poly_norm(T, N2);
+
 		beta_matrix.at(1, 0) = -xN2 * N2.mass * N2.crot * (xN * (0.33333) * eta_zeta_N2N + xN2 * eta_zeta_N2N2); // does vibrational relaxation time play any significant role?
 		beta_matrix.at(1, 1) = xN2 * N2.mass * N2.crot * (xN * eta_zeta_N2N + xN2 * eta_zeta_N2N2);
+		beta_matrix.at(2, 0) = (2. / 9.) * xN2 * xN * (-16 * omega11_N2N + sqrt(1. / (KLIB_CONST_K * T)) * N2.mass * N2.crot * eta_zeta_N2N);
+		beta_matrix.at(2, 2) = (2. / 9.) * xN2 * xN * (16 * omega11_N2N + sqrt(1. / (KLIB_CONST_K * T)) * N2.mass * N2.crot * eta_zeta_N2N);
+
 		beta_matrix.at(1, 0) /= sqrt(KLIB_CONST_K * T);
 		beta_matrix.at(1, 1) /= sqrt(KLIB_CONST_K * T);
-		beta_matrix.at(1, 2) = 0.; // ?
-		beta_matrix.at(2, 0) = (2. / 9.) * xN2 * xN * (-16 * omega11_N2N + sqrt(1. / (KLIB_CONST_K * T)) * N2.mass * N2.crot * eta_zeta_N2N);
-		beta_matrix.at(2, 1) = 0.; // ?
-		beta_matrix.at(2, 2) = (2. / 9.) * xN2 * xN * (16 * omega11_N2N + 2 * sqrt(1. / (KLIB_CONST_K * T)) * N2.mass * N2.crot * eta_zeta_N2N);
 		// R_react_N2 = (xN2 * n) * (klib::rec_rate_treanor_marrone(T, ddata_N2N2, N2, N, N) * (xN * n) * (xN * n) - klib::diss_rate_treanor_marrone(T, ddata_N2N2, N2) * (xN2 * n));
 		R_react_N2 = -klib::diss_rate_treanor_marrone(T, ddata_N2N, N2) * (xN * n) * (xN2 * n);
 		R_react_N2 /= sqrt(KLIB_CONST_K * T);
@@ -61,16 +62,15 @@ int main(int argc, const char * argv[]) {
 		PJsl = 0.0;
 
 		for (int vl = 0; vl <= N2.num_vibr; vl++) {
-			SJsl += (1. / 3.) * (12 * klib::diss_integral(T, 0, idata_N2N, N2, vl) - 8 * klib::diss_integral(T, 1, idata_N2N, N2, vl)) * N2.vibr_exp(T, vl) / N2.Z_vibr(T);
-			PJsl += (N2.avg_vibr_energy(T) - N2.vibr[vl]) * 8 * klib::diss_integral(T, 0, idata_N2N, N2, vl) * N2.vibr_exp(T, vl) / N2.Z_vibr(T);
+			SJsl += (1. / 3.) * (12 * klib::diss_integral(T, 0, idata_N2N, N2, vl, true, true, "VSS", true) - 8 * klib::diss_integral(T, 1, idata_N2N, N2, vl, true, true, "VSS", true)) * N2.vibr_exp(T, vl) / N2.Z_vibr(T);
+			PJsl += (N2.avg_vibr_energy(T, false) - N2.vibr[vl] / (KLIB_CONST_K * T)) * 8 * klib::diss_integral(T, 0, idata_N2N, N2, vl, true, true, "VSS", true) * N2.vibr_exp(T, vl) / N2.Z_vibr(T);
 		}
-		SJsl /= sqrt(KLIB_CONST_K * T);
-		PJsl /= sqrt(KLIB_CONST_K * T);
+		
 
 		right_parts[1] = xN2 * (R_react_N2 * (1.5 * KLIB_CONST_K * T + N2.avg_full_energy(T) + N2.form)
 			+ R_react_N * (1.5 * KLIB_CONST_K * T + N.form)) * klib::wt_poly_norm(T, N2) / (rho * T * cV) + PJsl * (xN * xN2) * n;
 		right_parts[2] = xN * (R_react_N2 * (1.5 * KLIB_CONST_K * T + N2.avg_full_energy(T) + N2.form)
-			+ R_react_N * (1.5 * KLIB_CONST_K * T + N.form)) * 1.5 / (rho * T * cV) + 1.5 * SJsl * (xN * xN2) * n;
+			+ R_react_N * (1.5 * KLIB_CONST_K * T + N.form)) * 1.5 / (rho * T * cV) - 2 * 1.5 * SJsl * (xN * xN2) * n;
 		results = arma::solve(beta_matrix, right_parts);
 		//std::cout << "\n" << beta_matrix;
 		std::cout << "\n" << -KLIB_CONST_K * T * (xN2 * results[0] + xN * results[2]) * klib::Gamma_diss(T, N2, N, N, xN2 * n, xN * n, xN * n);
