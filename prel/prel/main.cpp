@@ -53,7 +53,7 @@ int main(int argc, const char * argv[]) {
 		beta_matrix.at(2, 1) = 0.; // ?
 		beta_matrix.at(2, 2) = (2. / 9.) * xN2 * xN * (16 * omega11_N2N + 2 * sqrt(1. / (KLIB_CONST_K * T)) * N2.mass * N2.crot * eta_zeta_N2N);
 		// R_react_N2 = (xN2 * n) * (klib::rec_rate_treanor_marrone(T, ddata_N2N2, N2, N, N) * (xN * n) * (xN * n) - klib::diss_rate_treanor_marrone(T, ddata_N2N2, N2) * (xN2 * n));
-		R_react_N2 = (xN * n) * (klib::rec_rate_treanor_marrone(T, ddata_N2N, N2, N, N) * (xN * n) * (xN * n) - klib::diss_rate_treanor_marrone(T, ddata_N2N, N2) * (xN2 * n));
+		R_react_N2 = -klib::diss_rate_treanor_marrone(T, ddata_N2N, N2) * (xN * n) * (xN2 * n);
 		R_react_N2 /= sqrt(KLIB_CONST_K * T);
 		R_react_N = -2 * R_react_N2; // this is a binary mixture and the relaxation terms are related in a simple way
 
@@ -68,11 +68,11 @@ int main(int argc, const char * argv[]) {
 		PJsl /= sqrt(KLIB_CONST_K * T);
 
 		right_parts[1] = xN2 * (R_react_N2 * (1.5 * KLIB_CONST_K * T + N2.avg_full_energy(T) + N2.form)
-			+ R_react_N * (1.5 * KLIB_CONST_K * T + N.form)) * klib::wt_poly_norm(T, N2) / (rho * T * cV) + PJsl * (xN * xN2) * n * klib::Gamma_diss(T, N2, N, N, xN2 * n, xN * n, xN * n); // need Jsl averaged
+			+ R_react_N * (1.5 * KLIB_CONST_K * T + N.form)) * klib::wt_poly_norm(T, N2) / (rho * T * cV) + PJsl * (xN * xN2) * n;
 		right_parts[2] = xN * (R_react_N2 * (1.5 * KLIB_CONST_K * T + N2.avg_full_energy(T) + N2.form)
-			+ R_react_N * (1.5 * KLIB_CONST_K * T + N.form)) * 1.5 / (rho * T * cV) + 1.5 * SJsl * (xN * xN2) * n * klib::Gamma_diss(T, N2, N, N, xN2 * n, xN * n, xN * n); // need Jsl averaged
+			+ R_react_N * (1.5 * KLIB_CONST_K * T + N.form)) * 1.5 / (rho * T * cV) + 1.5 * SJsl * (xN * xN2) * n;
 		results = arma::solve(beta_matrix, right_parts);
 		//std::cout << "\n" << beta_matrix;
-		std::cout << "\n" << -KLIB_CONST_K * T * (xN2 * results[0] + xN * results[2]);
+		std::cout << "\n" << -KLIB_CONST_K * T * (xN2 * results[0] + xN * results[2]) * klib::Gamma_diss(T, N2, N, N, xN2 * n, xN * n, xN * n);
 	}
 }
