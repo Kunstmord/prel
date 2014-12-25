@@ -10,15 +10,19 @@
 #include <kineticlib.h>
 
 int main(int argc, const char * argv[]) {
-	double start_T = 2000.; // the start temperature
+double start_T = 2000.; // the start temperature
 	double end_T = 10000.0; // the end temperature
 	int points_amt = 50; // the amount of points
-	double xN = 0.2; // the relative numeric density of atomic nitrogen
+	double xN = 0.5; // the relative numeric density of atomic nitrogen
 	double xN2 = 1. - xN;
+	
+	std::string cs_model = "VSS";  // the dissociation cross-section model
+	 
 	double R_react_N2, R_react_N; // relaxation terms
 	arma::vec T_array = arma::linspace<arma::vec>(start_T, end_T, points_amt); // start value of T, end value of T, amount of steps
 	arma::vec prel = arma::zeros(50); // array of relaxation pressure values
 	double p = 100000.0; // atmospheric pressure
+
 	klib::MoleculeOneT N2 = klib::MoleculeOneT("N2");
 	klib::Atom N = klib::Atom("N");
 	arma::vec idata_N2N2 = klib::load_elastic_parameters(N2, N2); // N2 + N2 elastic interaction data
@@ -28,7 +32,8 @@ int main(int argc, const char * argv[]) {
 	arma::mat33 beta_matrix; // the matrix of beta integral brackets
 	arma::vec3 right_parts; // the right-hand side of the system
 	arma::vec3 results; // the values of the expansion coefficients g_{c,pq} - the order is g_{N2,10}, g_{N2,01}, g_{N,10}
-	double T, n, rho, omega11_N2N, tau_rot_N2N, tau_rot_N2N2, eta_zeta_N2N2, eta_zeta_N2N, cV, SJsl, PJsl; // the numeric density of the mixture, the density of the mixture, Omega^{(1,1)}_{N2,N}, rotational relaxation times for N2+N and N2+N2, the quantity 4T \pi / (\eta_{cd} * \xi_{cd}), the quantity dE/dT
+	double T, n, rho, omega11_N2N, tau_rot_N2N, tau_rot_N2N2, eta_zeta_N2N2, eta_zeta_N2N, cV, SJsl, PJsl, SJslN2, PJslN2; // the numeric density of the mixture, the density of the mixture, Omega^{(1,1)}_{N2,N}, rotational relaxation times for N2+N and N2+N2, the quantity 4T \pi / (\eta_{cd} * \xi_{cd}), the quantity dE/dT
+	double tmp_int00 = 0.0;
 	beta_matrix.at(0, 0) = 1.5 * (1. - xN);
 	beta_matrix.at(0, 2) = 1.5 * xN; // these appear due to the constraint conditions and are independent of temperature
 	beta_matrix.zeros();
@@ -53,26 +58,40 @@ int main(int argc, const char * argv[]) {
 
 		beta_matrix.at(1, 0) /= sqrt(KLIB_CONST_K * T);
 		beta_matrix.at(1, 1) /= sqrt(KLIB_CONST_K * T);
-		// R_react_N2 = (xN2 * n) * (klib::rec_rate_treanor_marrone(T, ddata_N2N2, N2, N, N) * (xN * n) * (xN * n) - klib::diss_rate_treanor_marrone(T, ddata_N2N2, N2) * (xN2 * n));
 		R_react_N2 = -klib::diss_rate_treanor_marrone(T, ddata_N2N, N2) * (xN * n) * (xN2 * n);
+		
 		R_react_N2 /= sqrt(KLIB_CONST_K * T);
 		R_react_N = -2 * R_react_N2; // this is a binary mixture and the relaxation terms are related in a simple way
 
 		SJsl = 0.0;
 		PJsl = 0.0;
+		SJslN2 = 0.0;
+		PJslN2 = 0.0;
 
 		for (int vl = 0; vl <= N2.num_vibr; vl++) {
-			SJsl += (1. / 3.) * (12 * klib::diss_integral(T, 0, idata_N2N, N2, vl, true, true, "VSS", true) - 8 * klib::diss_integral(T, 1, idata_N2N, N2, vl, true, true, "VSS", true)) * N2.vibr_exp(T, vl) / N2.Z_vibr(T);
-			PJsl += (N2.avg_vibr_energy(T, false) - N2.vibr[vl] / (KLIB_CONST_K * T)) * 8 * klib::diss_integral(T, 0, idata_N2N, N2, vl, true, true, "VSS", true) * N2.vibr_exp(T, vl) / N2.Z_vibr(T);
+			tmp_int00 = 8 * klib::diss_integral(T, 0, idata_N2N, N2, vl, true, true, cs_model, true);
+			SJsl += (1. / 3.) * (12 * tmp_int00  - klib::diss_integral(T, 1, idata_N2N, N2, vl, true, true, cs_model, true)) * N2.vibr_exp(T, vl) / N2.Z_vibr(T);
+			PJsl += (N2.avg_vibr_energy(T, false) - N2.vibr[vl] / (KLIB_CONST_K * T)) * tmp_int00 * N2.vibr_exp(T, vl) / N2.Z_vibr(T);
+
+			SJslN2 += (1. / 2.) * (12 * klib::diss_integral(T, 0, idata_N2N2, N2, vl, true, true, cs_model, true) - 8 * klib::diss_integral(T, 1, idata_N2N2, N2, vl, true, true, cs_model, true)) * N2.vibr_exp(T, vl) / N2.Z_vibr(T);
+			PJslN2 += (N2.avg_vibr_energy(T, false) - N2.vibr[vl] / (KLIB_CONST_K * T)) * 8 * klib::diss_integral(T, 0, idata_N2N2, N2, vl, true, true, cs_model, true) * N2.vibr_exp(T, vl) / N2.Z_vibr(T);
 		}
-		
 
 		right_parts[1] = xN2 * (R_react_N2 * (1.5 * KLIB_CONST_K * T + N2.avg_full_energy(T) + N2.form)
 			+ R_react_N * (1.5 * KLIB_CONST_K * T + N.form)) * klib::wt_poly_norm(T, N2) / (rho * T * cV) + PJsl * (xN * xN2) * n;
 		right_parts[2] = xN * (R_react_N2 * (1.5 * KLIB_CONST_K * T + N2.avg_full_energy(T) + N2.form)
 			+ R_react_N * (1.5 * KLIB_CONST_K * T + N.form)) * 1.5 / (rho * T * cV) - 2 * 1.5 * SJsl * (xN * xN2) * n;
 		results = arma::solve(beta_matrix, right_parts);
-		//std::cout << "\n" << beta_matrix;
-		std::cout << "\n" << -KLIB_CONST_K * T * (xN2 * results[0] + xN * results[2]) * klib::Gamma_diss(T, N2, N, N, xN2 * n, xN * n, xN * n);
+		std::cout << "\nprel_{N2+N}=" << -KLIB_CONST_K * T * (xN2 * results[0] + xN * results[2]) * klib::Gamma_diss(T, N2, N, N, xN2 * n, xN * n, xN * n);
+
+		R_react_N2 = klib::diss_rate_treanor_marrone(T, ddata_N2N2, N2) * (xN2 * n) * (xN2 * n);
+		R_react_N2 /= sqrt(KLIB_CONST_K * T);
+		R_react_N = -2 * R_react_N2;
+		right_parts[1] = xN2 * (R_react_N2 * (1.5 * KLIB_CONST_K * T + N2.avg_full_energy(T) + N2.form)
+			+ R_react_N * (1.5 * KLIB_CONST_K * T + N.form)) * klib::wt_poly_norm(T, N2) / (rho * T * cV) + PJslN2 * (xN2 * xN2) * n;
+		right_parts[2] = xN * (R_react_N2 * (1.5 * KLIB_CONST_K * T + N2.avg_full_energy(T) + N2.form)
+			+ R_react_N * (1.5 * KLIB_CONST_K * T + N.form)) * 1.5 / (rho * T * cV) - 2 * 1.5 * SJslN2 * (xN2 * xN2) * n;
+		results = arma::solve(beta_matrix, right_parts);
+		std::cout << "; prel_{N2+N2}=" << -KLIB_CONST_K * T * (xN2 * results[0] + xN * results[2]) * klib::Gamma_diss(T, N2, N, N, xN2 * n, xN * n, xN * n);
 	}
 }
