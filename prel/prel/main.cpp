@@ -10,18 +10,18 @@
 #include <kineticlib.h>
 
 int main(int argc, const char * argv[]) {
-double start_T = 2000.; // the start temperature
+	double start_T = 2000.; // the start temperature
 	double end_T = 10000.0; // the end temperature
-	int points_amt = 50; // the amount of points
+	double p = 100000.0; // atmospheric pressure
 	double xN = 0.5; // the relative numeric density of atomic nitrogen
 	double xN2 = 1. - xN;
 	
 	std::string cs_model = "VSS";  // the dissociation cross-section model
-	 
-	double R_react_N2, R_react_N; // relaxation terms
+	bool vl_dependent = false;  // whether the dissociation cross-section is dependent on the vibrational level of the dissociating molecule
+
+	int points_amt = 50; // the amount of points
 	arma::vec T_array = arma::linspace<arma::vec>(start_T, end_T, points_amt); // start value of T, end value of T, amount of steps
 	arma::vec prel = arma::zeros(50); // array of relaxation pressure values
-	double p = 100000.0; // atmospheric pressure
 
 	klib::MoleculeOneT N2 = klib::MoleculeOneT("N2");
 	klib::Atom N = klib::Atom("N");
@@ -32,6 +32,8 @@ double start_T = 2000.; // the start temperature
 	arma::mat33 beta_matrix; // the matrix of beta integral brackets
 	arma::vec3 right_parts; // the right-hand side of the system
 	arma::vec3 results; // the values of the expansion coefficients g_{c,pq} - the order is g_{N2,10}, g_{N2,01}, g_{N,10}
+	 
+	double R_react_N2, R_react_N; // relaxation terms
 	double T, n, rho, omega11_N2N, tau_rot_N2N, tau_rot_N2N2, eta_zeta_N2N2, eta_zeta_N2N, cV, SJsl, PJsl, SJslN2, PJslN2; // the numeric density of the mixture, the density of the mixture, Omega^{(1,1)}_{N2,N}, rotational relaxation times for N2+N and N2+N2, the quantity 4T \pi / (\eta_{cd} * \xi_{cd}), the quantity dE/dT
 	double tmp_int00 = 0.0;
 	beta_matrix.at(0, 0) = 1.5 * (1. - xN);
@@ -69,12 +71,13 @@ double start_T = 2000.; // the start temperature
 		PJslN2 = 0.0;
 
 		for (int vl = 0; vl <= N2.num_vibr; vl++) {
-			tmp_int00 = 8 * klib::diss_integral(T, 0, idata_N2N, N2, vl, true, true, cs_model, true);
+			tmp_int00 = klib::diss_integral(T, 0, idata_N2N, N2, vl, true, vl_dependent, cs_model, true);
 			SJsl += (1. / 3.) * (12 * tmp_int00  - klib::diss_integral(T, 1, idata_N2N, N2, vl, true, true, cs_model, true)) * N2.vibr_exp(T, vl) / N2.Z_vibr(T);
-			PJsl += (N2.avg_vibr_energy(T, false) - N2.vibr[vl] / (KLIB_CONST_K * T)) * tmp_int00 * N2.vibr_exp(T, vl) / N2.Z_vibr(T);
+			PJsl += (N2.avg_vibr_energy(T, false) - N2.vibr[vl] / (KLIB_CONST_K * T)) * 8 * tmp_int00 * N2.vibr_exp(T, vl) / N2.Z_vibr(T);
 
-			SJslN2 += (1. / 2.) * (12 * klib::diss_integral(T, 0, idata_N2N2, N2, vl, true, true, cs_model, true) - 8 * klib::diss_integral(T, 1, idata_N2N2, N2, vl, true, true, cs_model, true)) * N2.vibr_exp(T, vl) / N2.Z_vibr(T);
-			PJslN2 += (N2.avg_vibr_energy(T, false) - N2.vibr[vl] / (KLIB_CONST_K * T)) * 8 * klib::diss_integral(T, 0, idata_N2N2, N2, vl, true, true, cs_model, true) * N2.vibr_exp(T, vl) / N2.Z_vibr(T);
+			tmp_int00 = klib::diss_integral(T, 0, idata_N2N2, N2, vl, true, vl_dependent, cs_model, true);
+			SJslN2 += (1. / 2.) * (12 * tmp_int00 - 8 * klib::diss_integral(T, 1, idata_N2N2, N2, vl, true, vl_dependent, cs_model, true)) * N2.vibr_exp(T, vl) / N2.Z_vibr(T);
+			PJslN2 += (N2.avg_vibr_energy(T, false) - N2.vibr[vl] / (KLIB_CONST_K * T)) * 8 * tmp_int00 * N2.vibr_exp(T, vl) / N2.Z_vibr(T);
 		}
 
 		right_parts[1] = xN2 * (R_react_N2 * (1.5 * KLIB_CONST_K * T + N2.avg_full_energy(T) + N2.form)
