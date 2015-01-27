@@ -8,20 +8,21 @@
 
 #include <iostream>
 #include <kineticlib.h>
+#include <fstream>
 
 int main(int argc, const char * argv[]) {
-	double start_T = 2000.; // the start temperature
+	double start_T = 500.; // the start temperature
 	double end_T = 10000.0; // the end temperature
 	double p = 100000.0; // atmospheric pressure
-	double xN = 0.5; // the relative numeric density of atomic nitrogen
+	double xN = 0.9; // the relative numeric density of atomic nitrogen
 	double xN2 = 1. - xN;
 	
 	std::string cs_model = "VSS";  // the dissociation cross-section model
 	bool vl_dependent = false;  // whether the dissociation cross-section is dependent on the vibrational level of the dissociating molecule
 
-	int points_amt = 50; // the amount of points
+	int points_amt = 20; // the amount of points
 	arma::vec T_array = arma::linspace<arma::vec>(start_T, end_T, points_amt); // start value of T, end value of T, amount of steps
-	arma::vec prel = arma::zeros(50); // array of relaxation pressure values
+	arma::vec prel = arma::zeros(points_amt); // array of relaxation pressure values
 
 	klib::MoleculeOneT N2 = klib::MoleculeOneT("N2");
 	klib::Atom N = klib::Atom("N");
@@ -40,6 +41,10 @@ int main(int argc, const char * argv[]) {
 	beta_matrix.at(0, 2) = 1.5 * xN; // these appear due to the constraint conditions and are independent of temperature
 	beta_matrix.zeros();
 	right_parts[0] = 0.;
+
+	std::ofstream fout;
+	fout.open("results.csv");
+
 	for (int i = 0; i < points_amt; i++) {
 		T = T_array[i];
 		n = p / (KLIB_CONST_K * T);
@@ -86,8 +91,9 @@ int main(int argc, const char * argv[]) {
 			+ R_react_N * (1.5 * KLIB_CONST_K * T + N.form)) * 1.5 / (rho * T * cV) - 2 * 1.5 * SJsl * (xN * xN2) * n;
 		results = arma::solve(beta_matrix, right_parts);
 		std::cout << "\nprel_{N2+N}=" << -KLIB_CONST_K * T * (xN2 * results[0] + xN * results[2]) * klib::Gamma_diss(T, N2, N, N, xN2 * n, xN * n, xN * n);
+		prel[i] = -KLIB_CONST_K * T * (xN2 * results[0] + xN * results[2]) * klib::Gamma_diss(T, N2, N, N, xN2 * n, xN * n, xN * n);
 
-		R_react_N2 = klib::diss_rate_treanor_marrone(T, ddata_N2N2, N2) * (xN2 * n) * (xN2 * n);
+		/*R_react_N2 = klib::diss_rate_treanor_marrone(T, ddata_N2N2, N2) * (xN2 * n) * (xN2 * n);
 		R_react_N2 /= sqrt(KLIB_CONST_K * T);
 		R_react_N = -2 * R_react_N2;
 		right_parts[1] = xN2 * (R_react_N2 * (1.5 * KLIB_CONST_K * T + N2.avg_full_energy(T) + N2.form)
@@ -95,6 +101,15 @@ int main(int argc, const char * argv[]) {
 		right_parts[2] = xN * (R_react_N2 * (1.5 * KLIB_CONST_K * T + N2.avg_full_energy(T) + N2.form)
 			+ R_react_N * (1.5 * KLIB_CONST_K * T + N.form)) * 1.5 / (rho * T * cV);
 		results = arma::solve(beta_matrix, right_parts);
-		std::cout << "; prel_{N2+N2}=" << -KLIB_CONST_K * T * (xN2 * results[0] + xN * results[2]) * klib::Gamma_diss(T, N2, N, N, xN2 * n, xN * n, xN * n);
+		std::cout << "; prel_{N2+N2}=" << -KLIB_CONST_K * T * (xN2 * results[0] + xN * results[2]) * klib::Gamma_diss(T, N2, N, N, xN2 * n, xN * n, xN * n);*/
 	}
+
+	fout << "prel (xN=" << xN << ")";
+
+	for (int i = 0; i < points_amt; i++) {
+		fout << "\n" << prel[i];
+	}
+
+	fout.close();
+	return 1;
 }
