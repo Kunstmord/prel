@@ -14,7 +14,7 @@ int main(int argc, const char * argv[]) {
 	double start_T = 500.; // the start temperature
 	double end_T = 10000.0; // the end temperature
 	double p = 100000.0; // atmospheric pressure
-	double xN = 0.7; // the relative numeric density of atomic nitrogen
+	double xN = 0.5; // the relative numeric density of atomic nitrogen
 	double xN2 = 1. - xN;
 	
 	std::string cs_model = "VSS";  // the dissociation cross-section model
@@ -90,7 +90,7 @@ int main(int argc, const char * argv[]) {
 		right_parts[1] = xN2 * (R_react_N2 * (1.5 * KLIB_CONST_K * T + N2.avg_full_energy(T) + N2.form)
 			+ R_react_N * (1.5 * KLIB_CONST_K * T + N.form)) * klib::wt_poly_norm(T, N2) / (rho * T * cV) + PJsl * (xN * xN2) * n;
 		right_parts[2] = xN * (R_react_N2 * (1.5 * KLIB_CONST_K * T + N2.avg_full_energy(T) + N2.form)
-			+ R_react_N * (1.5 * KLIB_CONST_K * T + N.form)) * 1.5 / (rho * T * cV) - 2 * 1.5 * SJsl * (xN * xN2) * n;
+			+ R_react_N * (1.5 * KLIB_CONST_K * T + N.form)) * 1.5 / (rho * T * cV) - 4 * SJsl * (xN * xN2) * n;
 		results = arma::solve(beta_matrix, right_parts);
 		std::cout << "\nprel_{N2+N}=" << -KLIB_CONST_K * T * (xN2 * results[0] + xN * results[2]) * klib::Gamma_diss(T, N2, N, N, xN2 * n, xN * n, xN * n);
 		prel[i] = -KLIB_CONST_K * T * (xN2 * results[0] + xN * results[2]) * klib::Gamma_diss(T, N2, N, N, xN2 * n, xN * n, xN * n);
@@ -108,20 +108,10 @@ int main(int argc, const char * argv[]) {
 		std::cout << "; prel_{N2+N2}=" << -KLIB_CONST_K * T * (xN2 * results[0] + xN * results[2]) * klib::Gamma_diss(T, N2, N, N, xN2 * n, xN * n, xN * n);
 		prel2[i] = -KLIB_CONST_K * T * (xN2 * results[0] + xN * results[2]) * klib::Gamma_diss(T, N2, N, N, xN2 * n, xN * n, xN * n);
 
-		SJsl = 0.0;
-		SJslN2 = 0.0;
-		
-		for (int vl = 0; vl <= N2.num_vibr; vl++) {
-			tmp_int00 = klib::diss_integral(T, 0, idata_N2N, N2, vl, true, vl_dependent, cs_model, true);
-			SJsl += (12 * tmp_int00 - 8 * klib::diss_integral(T, 1, idata_N2N, N2, vl, true, true, cs_model, true)) * N2.vibr_exp(T, vl) / N2.Z_vibr(T);
 
-			tmp_int00 = klib::diss_integral(T, 0, idata_N2N2, N2, vl, true, vl_dependent, cs_model, true);
-			SJslN2 += (12 * tmp_int00 - 8 * klib::diss_integral(T, 1, idata_N2N2, N2, vl, true, vl_dependent, cs_model, true)) * N2.vibr_exp(T, vl) / N2.Z_vibr(T);
-		}
-
-		brack_N2_N = -xN2 * xN2 * (2 * results2[0] * SJsl + results2[1] * PJsl) + 2 * xN * xN2 * (results2[2] * SJsl);
-		brack_N_N2 = -xN2 * xN2 * (2 * results[0] * SJslN2 + results[1] * PJslN2);
-		std::cout << "[N,N2] =" << brack_N_N2 << ", [N2,N] =" << brack_N2_N;
+		brack_N2_N = -xN2 * xN2 * (-results2[0] * SJslN2 + results2[1] * PJslN2);
+		brack_N_N2 = -xN2 * xN * (-results[0] * SJsl + results[1] * PJsl) - 4 * xN * xN2 * (results[2] * SJsl);
+		std::cout << "\n[N,N2] =" << brack_N_N2 << ", [N2,N] =" << brack_N2_N;
 	}
 
 	/*fout << "prel (xN=" << xN << ")";
