@@ -14,7 +14,7 @@ int main(int argc, const char * argv[]) {
 	double start_T = 500.; // the start temperature
 	double end_T = 10000.0; // the end temperature
 	double p = 100000.0; // atmospheric pressure
-	double xN = 0.9; // the relative numeric density of atomic nitrogen
+	double xN = 0.7; // the relative numeric density of atomic nitrogen
 	double xN2 = 1. - xN;
 	
 	std::string cs_model = "VSS";  // the dissociation cross-section model
@@ -23,6 +23,7 @@ int main(int argc, const char * argv[]) {
 	int points_amt = 20; // the amount of points
 	arma::vec T_array = arma::linspace<arma::vec>(start_T, end_T, points_amt); // start value of T, end value of T, amount of steps
 	arma::vec prel = arma::zeros(points_amt); // array of relaxation pressure values
+	arma::vec prel2 = arma::zeros(points_amt); // array of relaxation pressure values
 
 	klib::MoleculeOneT N2 = klib::MoleculeOneT("N2");
 	klib::Atom N = klib::Atom("N");
@@ -32,7 +33,7 @@ int main(int argc, const char * argv[]) {
 	arma::vec ddata_N2N = klib::load_dissociation_parameters(N2, N); // N2 + N dissociation data
 	arma::mat33 beta_matrix; // the matrix of beta integral brackets
 	arma::vec3 right_parts; // the right-hand side of the system
-	arma::vec3 results; // the values of the expansion coefficients g_{c,pq} - the order is g_{N2,10}, g_{N2,01}, g_{N,10}
+	arma::vec3 results, results2; // the values of the expansion coefficients g_{c,pq} - the order is g_{N2,10}, g_{N2,01}, g_{N,10}
 	 
 	double R_react_N2, R_react_N; // relaxation terms
 	double T, n, rho, omega11_N2N, tau_rot_N2N, tau_rot_N2N2, eta_zeta_N2N2, eta_zeta_N2N, cV, SJsl, PJsl, SJslN2, PJslN2; // the numeric density of the mixture, the density of the mixture, Omega^{(1,1)}_{N2,N}, rotational relaxation times for N2+N and N2+N2, the quantity 4T \pi / (\eta_{cd} * \xi_{cd}), the quantity dE/dT
@@ -41,10 +42,11 @@ int main(int argc, const char * argv[]) {
 	beta_matrix.at(0, 2) = 1.5 * xN; // these appear due to the constraint conditions and are independent of temperature
 	beta_matrix.zeros();
 	right_parts[0] = 0.;
-
+/*
 	std::ofstream fout;
 	fout.open("results.csv");
-
+*/
+	double brack_N2_N, brack_N_N2;
 	for (int i = 0; i < points_amt; i++) {
 		T = T_array[i];
 		n = p / (KLIB_CONST_K * T);
@@ -77,7 +79,7 @@ int main(int argc, const char * argv[]) {
 
 		for (int vl = 0; vl <= N2.num_vibr; vl++) {
 			tmp_int00 = klib::diss_integral(T, 0, idata_N2N, N2, vl, true, vl_dependent, cs_model, true);
-			SJsl += (1. / 3.) * (12 * tmp_int00  - klib::diss_integral(T, 1, idata_N2N, N2, vl, true, true, cs_model, true)) * N2.vibr_exp(T, vl) / N2.Z_vibr(T);
+			SJsl += (1. / 3.) * (12 * tmp_int00 - 8 * klib::diss_integral(T, 1, idata_N2N, N2, vl, true, true, cs_model, true)) * N2.vibr_exp(T, vl) / N2.Z_vibr(T);
 			PJsl += (N2.avg_vibr_energy(T, false) - N2.vibr[vl] / (KLIB_CONST_K * T)) * 8 * tmp_int00 * N2.vibr_exp(T, vl) / N2.Z_vibr(T);
 
 			tmp_int00 = klib::diss_integral(T, 0, idata_N2N2, N2, vl, true, vl_dependent, cs_model, true);
@@ -92,8 +94,9 @@ int main(int argc, const char * argv[]) {
 		results = arma::solve(beta_matrix, right_parts);
 		std::cout << "\nprel_{N2+N}=" << -KLIB_CONST_K * T * (xN2 * results[0] + xN * results[2]) * klib::Gamma_diss(T, N2, N, N, xN2 * n, xN * n, xN * n);
 		prel[i] = -KLIB_CONST_K * T * (xN2 * results[0] + xN * results[2]) * klib::Gamma_diss(T, N2, N, N, xN2 * n, xN * n, xN * n);
+		results2 = results;
 
-		/*R_react_N2 = klib::diss_rate_treanor_marrone(T, ddata_N2N2, N2) * (xN2 * n) * (xN2 * n);
+		R_react_N2 = klib::diss_rate_treanor_marrone(T, ddata_N2N2, N2) * (xN2 * n) * (xN2 * n);
 		R_react_N2 /= sqrt(KLIB_CONST_K * T);
 		R_react_N = -2 * R_react_N2;
 		right_parts[1] = xN2 * (R_react_N2 * (1.5 * KLIB_CONST_K * T + N2.avg_full_energy(T) + N2.form)
@@ -101,15 +104,32 @@ int main(int argc, const char * argv[]) {
 		right_parts[2] = xN * (R_react_N2 * (1.5 * KLIB_CONST_K * T + N2.avg_full_energy(T) + N2.form)
 			+ R_react_N * (1.5 * KLIB_CONST_K * T + N.form)) * 1.5 / (rho * T * cV);
 		results = arma::solve(beta_matrix, right_parts);
-		std::cout << "; prel_{N2+N2}=" << -KLIB_CONST_K * T * (xN2 * results[0] + xN * results[2]) * klib::Gamma_diss(T, N2, N, N, xN2 * n, xN * n, xN * n);*/
+		
+		std::cout << "; prel_{N2+N2}=" << -KLIB_CONST_K * T * (xN2 * results[0] + xN * results[2]) * klib::Gamma_diss(T, N2, N, N, xN2 * n, xN * n, xN * n);
+		prel2[i] = -KLIB_CONST_K * T * (xN2 * results[0] + xN * results[2]) * klib::Gamma_diss(T, N2, N, N, xN2 * n, xN * n, xN * n);
+
+		SJsl = 0.0;
+		SJslN2 = 0.0;
+		
+		for (int vl = 0; vl <= N2.num_vibr; vl++) {
+			tmp_int00 = klib::diss_integral(T, 0, idata_N2N, N2, vl, true, vl_dependent, cs_model, true);
+			SJsl += (12 * tmp_int00 - 8 * klib::diss_integral(T, 1, idata_N2N, N2, vl, true, true, cs_model, true)) * N2.vibr_exp(T, vl) / N2.Z_vibr(T);
+
+			tmp_int00 = klib::diss_integral(T, 0, idata_N2N2, N2, vl, true, vl_dependent, cs_model, true);
+			SJslN2 += (12 * tmp_int00 - 8 * klib::diss_integral(T, 1, idata_N2N2, N2, vl, true, vl_dependent, cs_model, true)) * N2.vibr_exp(T, vl) / N2.Z_vibr(T);
+		}
+
+		brack_N2_N = -xN2 * xN2 * (2 * results2[0] * SJsl + results2[1] * PJsl) + 2 * xN * xN2 * (results2[2] * SJsl);
+		brack_N_N2 = -xN2 * xN2 * (2 * results[0] * SJslN2 + results[1] * PJslN2);
+		std::cout << "[N,N2] =" << brack_N_N2 << ", [N2,N] =" << brack_N2_N;
 	}
 
-	fout << "prel (xN=" << xN << ")";
+	/*fout << "prel (xN=" << xN << ")";
 
 	for (int i = 0; i < points_amt; i++) {
-		fout << "\n" << prel[i];
+		fout << "\n" << prel2[i];
 	}
 
-	fout.close();
+	fout.close();*/
 	return 1;
 }
