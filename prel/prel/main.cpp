@@ -14,7 +14,7 @@ int main(int argc, const char * argv[]) {
 	double start_T = 500.; // the start temperature
 	double end_T = 10000.0; // the end temperature
 	double p = 100000.0; // atmospheric pressure
-	double xN = 0.5; // the relative numeric density of atomic nitrogen
+	double xN = 0.2; // the relative numeric density of atomic nitrogen
 	double xN2 = 1. - xN;
 	
 	std::string cs_model = "VSS";  // the dissociation cross-section model
@@ -109,9 +109,12 @@ int main(int argc, const char * argv[]) {
 		prel2[i] = -KLIB_CONST_K * T * (xN2 * results[0] + xN * results[2]) * klib::Gamma_diss(T, N2, N, N, xN2 * n, xN * n, xN * n);
 
 
-		brack_N2_N = -xN2 * xN2 * (-results2[0] * SJslN2 + results2[1] * PJslN2);
-		brack_N_N2 = -xN2 * xN * (-results[0] * SJsl + results[1] * PJsl) - 4 * xN * xN2 * (results[2] * SJsl);
+		brack_N2_N = -xN2 * xN2 * (results2[0] * SJslN2 + results2[1] * PJslN2);
+		brack_N_N2 = -xN2 * xN * (results[0] * SJsl + results[1] * PJsl) + 4 * xN * xN2 * (results[2] * SJsl);
 		std::cout << "\n[N,N2] =" << brack_N_N2 << ", [N2,N] =" << brack_N2_N;
+		auto brack_N_N = -xN2 * xN * (results2[0] * SJsl + results2[1] * PJsl) + 4 * xN * xN2 * (results2[2] * SJsl);
+		auto brack_N2_N2 = -xN2 * xN2 * (results[0] * SJslN2 + results[1] * PJslN2);
+		std::cout << "\n[N,N] =" << brack_N_N << ", [N2,N2] =" << brack_N2_N2;
 	}
 
 	/*fout << "prel (xN=" << xN << ")";
