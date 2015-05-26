@@ -8,17 +8,17 @@
 
 #include <iostream>
 #include <kineticlib.h>
-#include <fstream>
+#include <fstream> 
 
 int main(int argc, const char * argv[]) {
 	double start_T = 500.; // the start temperature
 	double end_T = 10000.0; // the end temperature
 	double p = 100000.0; // atmospheric pressure
-	double xN = 0.2; // the relative numeric density of atomic nitrogen
+	double xN = 0.9; // the relative numeric density of atomic nitrogen
 	double xN2 = 1. - xN;
 	
 	std::string cs_model = "VSS";  // the dissociation cross-section model
-	bool vl_dependent = false;  // whether the dissociation cross-section is dependent on the vibrational level of the dissociating molecule
+	bool vl_dependent = true;  // whether the dissociation cross-section is dependent on the vibrational level of the dissociating molecule
 
 	int points_amt = 20; // the amount of points
 	arma::vec T_array = arma::linspace<arma::vec>(start_T, end_T, points_amt); // start value of T, end value of T, amount of steps
@@ -38,14 +38,15 @@ int main(int argc, const char * argv[]) {
 	double R_react_N2, R_react_N; // relaxation terms
 	double T, n, rho, omega11_N2N, tau_rot_N2N, tau_rot_N2N2, eta_zeta_N2N2, eta_zeta_N2N, cV, SJsl, PJsl, SJslN2, PJslN2; // the numeric density of the mixture, the density of the mixture, Omega^{(1,1)}_{N2,N}, rotational relaxation times for N2+N and N2+N2, the quantity 4T \pi / (\eta_{cd} * \xi_{cd}), the quantity dE/dT
 	double tmp_int00 = 0.0;
+	beta_matrix.zeros();
 	beta_matrix.at(0, 0) = 1.5 * (1. - xN);
 	beta_matrix.at(0, 2) = 1.5 * xN; // these appear due to the constraint conditions and are independent of temperature
-	beta_matrix.zeros();
 	right_parts[0] = 0.;
-/*
-	std::ofstream fout;
-	fout.open("results.csv");
-*/
+
+	//std::ofstream fout, fout2;
+	//fout.open("results_N_09.csv");
+	//fout2.open("results_N2_09.csv");
+
 	double brack_N2_N, brack_N_N2;
 	for (int i = 0; i < points_amt; i++) {
 		T = T_array[i];
@@ -60,13 +61,21 @@ int main(int argc, const char * argv[]) {
 		cV = 1.5 * KLIB_CONST_K * n / rho + xN2 * (N2.mass * n / rho) * (N2.crot + N2.E_vibr_dT(T));
 		beta_matrix.at(0, 1) = xN2 * klib::wt_poly_norm(T, N2);
 
-		beta_matrix.at(1, 0) = -xN2 * N2.mass * N2.crot * (xN * (0.33333) * eta_zeta_N2N + xN2 * eta_zeta_N2N2); // does vibrational relaxation time play any significant role?
-		beta_matrix.at(1, 1) = xN2 * N2.mass * N2.crot * (xN * eta_zeta_N2N + xN2 * eta_zeta_N2N2);
+		beta_matrix.at(1, 0) = -xN2 * N2.mass * N2.crot * (xN * 0.33333 * eta_zeta_N2N + xN2 * eta_zeta_N2N2 ) * sqrt(1. / (KLIB_CONST_K * T)); // does vibrational relaxation time play any significant role?
+		beta_matrix.at(1, 1) = xN2 * N2.mass * N2.crot * (xN * eta_zeta_N2N + xN2 * eta_zeta_N2N2) * sqrt(1. / (KLIB_CONST_K * T));
+		beta_matrix.at(1, 2) = -xN * xN2 * 0.66666 * N2.mass * N2.crot * eta_zeta_N2N * sqrt(1. / (KLIB_CONST_K * T));
 		beta_matrix.at(2, 0) = (2. / 9.) * xN2 * xN * (-16 * omega11_N2N + sqrt(1. / (KLIB_CONST_K * T)) * N2.mass * N2.crot * eta_zeta_N2N);
-		beta_matrix.at(2, 2) = (2. / 9.) * xN2 * xN * (16 * omega11_N2N + sqrt(1. / (KLIB_CONST_K * T)) * N2.mass * N2.crot * eta_zeta_N2N);
+		beta_matrix.at(2, 1) = beta_matrix.at(1, 2);
+		beta_matrix.at(2, 2) = (2. / 9.) * xN2 * xN * (16 * omega11_N2N + 2. * sqrt(1. / (KLIB_CONST_K * T)) * N2.mass * N2.crot * eta_zeta_N2N);
 
-		beta_matrix.at(1, 0) /= sqrt(KLIB_CONST_K * T);
-		beta_matrix.at(1, 1) /= sqrt(KLIB_CONST_K * T);
+		/*if (i == points_amt - 1) {
+			std::cout << "\n\n" << beta_matrix << "\n\n";
+			std::cout << "\n\n" << 16 * omega11_N2N << " " << sqrt(1. / (KLIB_CONST_K * T)) * N2.mass * N2.crot * eta_zeta_N2N << " " << sqrt(1. / (KLIB_CONST_K * T)) * N2.mass * N2.crot * eta_zeta_N2N2 << "\n\n";
+			std::cout << "\n\n" << N.form << "\n\n";
+			std::cout << "\n\n" << KLIB_CONST_K * T << "\n\n";
+			std::cout << "\n\n" << N2.avg_full_energy(T) << "\n\n";
+		}*/
+
 		R_react_N2 = -klib::diss_rate_treanor_marrone(T, ddata_N2N, N2) * (xN * n) * (xN2 * n);
 		
 		R_react_N2 /= sqrt(KLIB_CONST_K * T);
@@ -96,7 +105,7 @@ int main(int argc, const char * argv[]) {
 		prel[i] = -KLIB_CONST_K * T * (xN2 * results[0] + xN * results[2]) * klib::Gamma_diss(T, N2, N, N, xN2 * n, xN * n, xN * n);
 		results2 = results;
 
-		R_react_N2 = klib::diss_rate_treanor_marrone(T, ddata_N2N2, N2) * (xN2 * n) * (xN2 * n);
+		R_react_N2 = -klib::diss_rate_treanor_marrone(T, ddata_N2N2, N2) * (xN2 * n) * (xN2 * n);
 		R_react_N2 /= sqrt(KLIB_CONST_K * T);
 		R_react_N = -2 * R_react_N2;
 		right_parts[1] = xN2 * (R_react_N2 * (1.5 * KLIB_CONST_K * T + N2.avg_full_energy(T) + N2.form)
@@ -108,21 +117,24 @@ int main(int argc, const char * argv[]) {
 		std::cout << "; prel_{N2+N2}=" << -KLIB_CONST_K * T * (xN2 * results[0] + xN * results[2]) * klib::Gamma_diss(T, N2, N, N, xN2 * n, xN * n, xN * n);
 		prel2[i] = -KLIB_CONST_K * T * (xN2 * results[0] + xN * results[2]) * klib::Gamma_diss(T, N2, N, N, xN2 * n, xN * n, xN * n);
 
-
-		brack_N2_N = -xN2 * xN2 * (results2[0] * SJslN2 + results2[1] * PJslN2);
-		brack_N_N2 = -xN2 * xN * (results[0] * SJsl + results[1] * PJsl) + 4 * xN * xN2 * (results[2] * SJsl);
+		brack_N2_N = xN2 * xN2 * (results2[0] * SJslN2 + results2[1] * PJslN2);
+		brack_N_N2 = xN2 * xN * (results[0] * SJsl + results[1] * PJsl) - 4 * xN * xN2 * (results[2] * SJsl);
 		std::cout << "\n[N,N2] =" << brack_N_N2 << ", [N2,N] =" << brack_N2_N;
-		auto brack_N_N = -xN2 * xN * (results2[0] * SJsl + results2[1] * PJsl) + 4 * xN * xN2 * (results2[2] * SJsl);
-		auto brack_N2_N2 = -xN2 * xN2 * (results[0] * SJslN2 + results[1] * PJslN2);
+		auto brack_N_N = xN2 * xN * (results2[0] * SJsl + results2[1] * PJsl) - 4 * xN * xN2 * (results2[2] * SJsl);
+		auto brack_N2_N2 = xN2 * xN2 * (results[0] * SJslN2 + results[1] * PJslN2);
 		std::cout << "\n[N,N] =" << brack_N_N << ", [N2,N2] =" << brack_N2_N2;
+		//std::cout << "\n\nresults = " << results2[1] << " " << results[1] << " " << PJsl << " " << PJslN2;
 	}
 
-	/*fout << "prel (xN=" << xN << ")";
+	//fout << "prel (xN=" << xN << ")";
+	//fout2 << "prel (xN=" << xN << ")";
 
-	for (int i = 0; i < points_amt; i++) {
-		fout << "\n" << prel2[i];
-	}
+	//for (int i = 0; i < points_amt; i++) {
+		//fout << "\n" << prel[i];
+		//fout2 << "\n" << prel2[i];
+	//}
 
-	fout.close();*/
+	//fout.close();
+	//fout2.close();
 	return 1;
 }
